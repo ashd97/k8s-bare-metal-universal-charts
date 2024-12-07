@@ -1,0 +1,16 @@
+{{ if not .Values.projectIngressProxy.tls.istioDisabled }}
+# Checks if Istio TLS is not disabled in the configuration.
+apiVersion: networking.istio.io/v1alpha3  # Specifies the API version for Istio DestinationRule resource.
+kind: DestinationRule  # Defines the kind of resource as a DestinationRule.
+metadata:  # Metadata section for the resource.
+  name: {{ .Chart.Name }}-wildcard-actuator-mtls  # Sets the name of the DestinationRule based on the chart name and a custom suffix.
+  namespace: {{ .Values.projectIngressProxy.vault.namespace }}  # Defines the namespace where the DestinationRule will be applied.
+spec:  # Specifications for the DestinationRule.
+  host: '*.{{ .Values.projectIngressProxy.vault.namespace }}.svc.cluster.local'  # Specifies the host for the DestinationRule, using a wildcard for all services in the defined namespace.
+  trafficPolicy:  # Defines the traffic policy for the destination.
+    portLevelSettings:  # Defines port-specific settings.
+    - port:  # Defines settings for a specific port.
+        number: 8080  # Applies the settings to port 8080, where your Java services are listening for REST API requests.
+      tls:  # TLS settings for the traffic.
+        mode: ISTIO_MUTUAL  # Enables mutual TLS, ensuring both the client and server authenticate each other using certificates.
+{{ end }}

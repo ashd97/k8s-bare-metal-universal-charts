@@ -1,0 +1,38 @@
+{{ if not .Values.projectApp.settings.filebeatToKafkaDisabled }}
+filebeat.inputs: 
+- type: log
+  enabled: true
+  paths:
+  /tmp/*.log
+  json.keys_under_root: true
+  close_removed: true
+output.kafka:
+  enabled: true
+  hosts:
+    {{- range $value = .Values.projectApp.settings.filebeat.kafkaServersForLogs }}
+      - "{{ $value }}"
+    {{ end }}
+topic: "{{ .Values.projectApp.settings.filebeat.kafkaTopicForLogs }}"
+partition.round_robin:
+  reachable_only: false
+required_acks: 1
+compression: gzip
+max_message_bytes: 1000000
+codec.json:
+  pretty: false
+ssl.enabled: true
+ssl.key: "/vault/secrets/filebeat.key"
+ssl.certificate: "/vault/secrets/filebeat.pem"
+ssl.certificate_authorities: "/vault/secrets/ca.crt"
+processors:
+- drop_fields:
+    fields: [ "host", "agent", "log", "input", "ecs" ]
+    ignore_missing: false
+- add_fields:
+    target: ""
+    fields:
+      service: ${SERVICE_NAME}
+      version: ${SERVICE_VERSION}
+      pod: ${POD_NAME}
+      namespace: ${POD_NAMESPACE}
+{{ end }}

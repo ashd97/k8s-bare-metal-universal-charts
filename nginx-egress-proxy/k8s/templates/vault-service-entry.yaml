@@ -1,0 +1,18 @@
+{{ if not .Values.projectEgressProxy.settings.istioDisabled }}
+apiVersion: networking.istio.io/v1alpha3  # Specifies the API version for Istio resources
+kind: ServiceEntry  # Defines the kind of resource, in this case, a ServiceEntry for Istio
+metadata:  # Metadata for the Istio resource
+  name: {{.Chart.Name }}-vault-service-entry  # The name of the ServiceEntry resource, based on the chart name
+  namespace: {{ .Values.projectEgressProxy.vault.namespace }}  # The namespace where the ServiceEntry will be created, from the Vault settings
+  annotations:  # Annotations to store additional metadata
+    deploymentTime: {{ now | date "02.01.2006 15:04:05" }}  # Adds the deployment time to the annotations
+spec:  # The specification of the ServiceEntry
+  hosts:  # Specifies the list of hosts that this entry applies to
+  - {{ .Values.projectEgressProxy.vault.domain }}  # The domain of the Vault server, used for routing traffic
+  ports:  # Specifies the ports used for communication with the Vault service
+  - number: 8200  # The port number for Vault service
+    name: https  # The name of the port, indicating HTTPS communication
+    protocol: HTTPS  # The protocol used for communication, HTTPS in this case
+  resolution: NONE  # Defines how the service is resolved (NONE indicates static resolution)
+  location: MESH_EXTERNAL  # Defines that the service is external to the mesh
+{{ end }}

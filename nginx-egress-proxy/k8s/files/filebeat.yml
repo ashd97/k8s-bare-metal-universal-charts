@@ -1,0 +1,20 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /tmp/*.log
+    json.keys_under_root: true
+    close_removed: true
+output.console:
+  pretty: false
+processors:
+- drop_fields:
+    fields: [ "host", "agent", "log", "input", "ecs" ]
+    ignore_missing: false
+- add_fields:
+    target: ""
+    fields:
+      service: ${NGINX_EGRESS_PROXY_SERVICE_NAME}
+      version: ${NGINX_EGRESS_PROXY_SERVICE_VERSION}
+      pod: ${POD_NAME}
+      namespace: ${POD_NAMESPACE}

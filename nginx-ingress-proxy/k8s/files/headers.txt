@@ -1,0 +1,22 @@
+# Set base headers
+proxy_set_header Host $host; # Passes the client's original Host header to the upstream server.
+proxy_set_header X-Real-IP $remote_addr; # Adds the client's real IP address in the X-Real-IP header.
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; # Appends the client’s IP address to the X-Forwarded-For header for tracking the request chain.
+proxy_set_header X-Forwarded-Proto $scheme; # Indicates whether the original request used HTTP or HTTPS.
+
+# Set headers to handle CORS
+add_header 'Access-Control-Allow-Origin' '*' always; # Allows requests from any origin for all HTTP methods.
+add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always; # Specifies allowed HTTP methods for all responses.
+add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, X-Requested-With' always; # Lists allowed custom headers for all responses.
+add_header 'Access-Control-Allow-Credentials' 'true' always; # Indicates that cookies and credentials are allowed for all responses.
+
+# Handle OPTIONS preflight requests
+if ($request_method = OPTIONS) { # Checks if the incoming request is an OPTIONS preflight request (for CORS).
+    add_header 'Access-Control-Allow-Origin' '*'; # Allows requests from any origin for the OPTIONS method.
+    add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE'; # Specifies allowed HTTP methods for CORS.
+    add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, X-Requested-With'; # Lists allowed custom headers for CORS.
+    add_header 'Access-Control-Allow-Credentials' 'true'; # Indicates that cookies and credentials are allowed.
+    add_header 'Content-Length' 0; # Sets the Content-Length to 0 for OPTIONS responses as they have no body.
+    add_header 'Content-Type' 'text/plain'; # Specifies the Content-Type for the OPTIONS response.
+    return 204; # Returns HTTP 204 No Content status for preflight requests.
+}

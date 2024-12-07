@@ -1,0 +1,36 @@
+filebeat.inputs:  # Defines inputs for Filebeat.
+- type: log  # Specifies that the input type is for log files.
+  enabled: true  # Enables this input.
+  json.keys_under_root: true  # Parses JSON logs and places keys at the root level of the event.
+  paths: /tmp/*.log  # Specifies the path to log files to be processed.
+  close_removed: true  # Closes file handlers when a log file is removed.
+  stream: stdout  # Sets the stream to stdout for logs.
+
+output.logstash:  # Configures Logstash as the output for Filebeat.
+  enabled: true  # Enables Logstash output.
+  hosts:  # Defines the list of Logstash hosts. Iterates over Logstash hosts provided in the configuration.
+    {{ range .Values.projectIngressProxy.settings.proxy.logstashWithBeatsInputForFilebeat }}
+      {{ . | quote }}
+    {{ end }}
+  compression: gzip  # Enables gzip compression for data sent to Logstash.
+  max_message_bytes: 1000000  # Sets the maximum size for a single message in bytes.
+  codec.json:  # Configures JSON codec for Logstash.
+    pretty: true  # Formats JSON output for readability.
+
+ssl.enabled: true  # Enables SSL for secure communication.
+ssl.key: "/usr/share/filebeat/ssl/client.key"  # Path to the client SSL key.
+ssl.certificate: "/usr/share/filebeat/ssl/client.crt"  # Path to the client SSL certificate.
+ssl.certificate_authorities: "/usr/share/filebeat/ssl/cacerts.crt"  # Path to the CA certificate used to validate Logstash.
+
+processors:  # Defines processors to modify and enrich events before sending.
+- drop_fields:  # Drops unnecessary fields from the event.
+    fields: [ "host", "agent", "log", "input", "ecs" ]  # Specifies the fields to drop.
+    ignore_missing: false  # Throws an error if specified fields are missing.
+
+- add_fields:  # Adds custom fields to the event.
+    target: ""  # Adds fields at the root level of the event.
+    fields:  # Specifies the fields to add.
+      service: ${NGINX_EGRESS_PROXY_SERVICE_NAME}  # Adds the service name from an environment variable.
+      version: ${NGINX_EGRESS_PROXY_SERVICE_VERSION}  # Adds the service version from an environment variable.
+      pod: ${POD_NAME}  # Adds the pod name from an environment variable.
+      namespace: ${POD_NAMESPACE}  # Adds the namespace from an environment variable.

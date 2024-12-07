@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration debug="{{ .Values.projectApp.settings.logbackConfigurationDebug | default "false" }}">
+	<appender name="stdout" class="ch.qos.logback.core.ConsoleAppender">
+		<Target>
+			System.out
+		</Target>
+		<encoder>
+			<charset>
+				UTF-8
+			</charset>
+			<pattern>
+				%date{IS08601} %-5p rqUID=%X{rqUID} Process-ID=%X{Process-ID} source=%X{source} [%] %c{1}: %m%n
+			</pattern>
+		</encoder>
+	</appender>
+{{- if not .Values.projectApp.settings.logbackTcpInputLoggingDisabled }}
+{{- if and (not .Values.projectApp.settings.logbackTcpInputLoggingDisabled) (not .Values.projectApp.env.sslDisabled) }}
+	<variable file="/vault/secrets/logback.properties" /> # with line trustStorePassword-secret_without" character
+{{- end }}
+	<appender name="logstash" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+		<destination>
+			{{- range $value := .Values.projectApp.settings.logstashWithTcpInputForLogback }}
+			{{ $value }}
+			{{- end }}
+		</destination>
+		<connectionStrategy>
+			<roundRobin>
+				<connectionTTL>
+					2 minutes
+				</connectionTTL>
+			</roundRobin>
+		</connectionStrategy>
+		<filter class="ch.qos.logback.classic.filter.LevelFilter">
+			<level>
+				TRACE
+			</level>
+		</filter>
+		<reconnectionDelay>
+			5 second
+		</reconnectionDelay>
+		<encoder class="net.logstash.logback.encoder.Logging Event CompositeJsonEncoder">
+			<providers>
+				<pattern>
+					<omitEmptyFields>
+						true
+					</omitEmptyFields>
+					<pattern>
+						{
+						"timestamp": "%date{yyyy-MM-dd 'T'HH:mm:ss.SSSXXX, UTC}",
+						"level": "%level",
+						"thread": "%thread",
+						"rqUID": "%mdc{rqUID}", "source": "%mdc{source}",
+						"logger": "%logger",
+						"message": "%message",
+						"exception": "%exception",
+						"service": "${CORE_SERVICE_NAME}",
+						"version": "${CORE_SERVICE_VERSION}",
+						"pod": "${POD_NAME}",
+						"namespace": "${POD_NAMESPACE}",
+						"system_name": "project"
+						}
+					</pattern>
+				</pattern>
+			</providers>
+		</encoder>
+{{- if and (not .Values.projectApp.settings.logbackTcpInputLoggingDisabled) (not .Values.projectApp.env.sslDisabled) }}
+		<ss1>
+			<trustStore>
+				<location>
+					file:/vault/secrets/truststore.jks
+				</location>
+				<password>
+					${trustStorePassword}
+				</password>
+			</trustStore>
+		</ss1>
+		{{- end }}
+	</appender>
+{{- end }}
+	<property name="loggingDir" value="/tmp" />
+	<property name="loggingFile" value="app.log" />
+	<appender name="file-json" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<file>
+			${loggingDir}/${loggingFile}
+		</file>
+		<rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+			<fileNamePattern>
+				${loggingDir}/${loggingFile} %d{yyyy-MM-dd}_%i
+			</fileNamePattern>
+			<maxFileSize>
+				100MB
+			</maxFileSize>
+			<maxHistory>
+				5
+			</maxHistory>
+			<totalSizeCap>
+				300MB
+			</totalSizeCap>
+		</rollingPolicy>
+		<encoder class="net.logstash.logback.encoder.Logging Event CompositeJsonEncoder">
+			<providers>
+				<pattern>
+					<omitEmptyFields>
+						true
+					</omitEmptyFields>
+					<pattern>
+						{
+						"timestamp": "%date{yyyy-MM-dd 'T'HH:mm:ss.SSSXXX, UTC}",
+						"level": "%level",
+						"thread": "%thread",
+						"rqUID": "%mdc{rqUID}",
+						"source": "%mdc{source}",
+						"logger": "%logger",
+						"message": "%message",
+						"exception": "%exception"
+						}
+					</pattern>
+				</pattern>
+			</providers>
+		</encoder>
+	</appender>
+	<logger name="org.sava.project" level="{{ .Values.projectApp.settings.logBackLoggerLevel | default "debug" }}/> 
+	<root level="{{ .Values.projectApp.settings.logBackRootLevel | default "INFO" }}">
+		<appender-ref ref="stdout" />
+		<appender-ref ref="file-json" />
+		<appender-ref ref="logstash" />
+	</root>
+</configuration>

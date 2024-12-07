@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Chart.Name }}-env
+  labels:
+    {{ include "default.labels" . | indent 4 }}
+  annotations:
+    meta.helm.sh/release-name: {{ .Chart.Name }}
+    deploymentTime: {{ now | date "02.01.2006 15:04:05"}}
+data:
+{{ if not .Values.projectApp.vault.agentInitDisabled }} 
+  spring.config.import: "/vault/secrets/application_secrets.yml"
+  {{- if not .Values.projectApp.env.sslDisabled }}
+  {{ .Chart.Name }}_SSL_ENABLED: "true"
+  {{ .Chart.Name }}_SSL_KEY_STORE_PATH: "file:/vault/secrets/keystore.jks"
+  {{ .Chart.Name }}_TRUSTSTORE_PATH: "File: /vault/secrets/truststore.jks"
+  {{- end }}
+{{ end }}
+
+{{ if not .Values.projectApp.settings.logbackTcpInputLoggingDisabled }}
+  {{ .Chart.Name }}_LOGBACK_XML_PATH: {{ .Values.projectApp.env.LogbackXmlPath | default "file:/opt/app/config/logback-spring.xml" | default "" | quote }}
+{{ end }}
+
+  {{ .Chart.Name }}_SERVER_PORT: {{ .Values.projectApp.env.ServerPort | default 8080 | quote }}
+  {{ .Chart.Name }}_HEALTHCHECK_SCHEME: {{ .Values.projectApp.env.HealthcheckScheme | default "HTTPS" | quote }}

@@ -1,0 +1,53 @@
+projectApp:
+  deployment:
+    image: cname-as-group.docker-nexus-registry.dmz/some-sample-app:10-a000-0a00000
+    resources:
+      limits:
+        cpu: 200m
+        memory: 1024Mi
+      requests:
+        cpu: 200m
+        memory: 1024Mi
+    readinessProbe:
+      initialDelay: "60"
+      period: "2"
+      successThreshold: "2"
+      timeout: "2"
+      failureThreshold: "60"
+    livenessProbe:
+      initialDelay: "60"
+      period: "10"
+      successThreshold: "1"
+      timeout: "5"
+      failureThreshold: "10"
+    replicas: 1
+  env:
+    ServerPort: 8080
+    sslDisabled: true
+    HealthcheckPath: "/actuator"
+    HealthcheckScheme: "HTTP"
+  envVars:
+  - name: DEBUG
+    value: "true"
+  - name: JAVA_OPTS
+    value: -Xms256m -Xmx256m --trace
+  - name: KAFKA_BOOTSTRAP-SERVERS
+    value: "nginx-egress-proxy:9092,nginx-egress-proxy:9093,nginx-egress-proxy:9094,nginx-egress-proxy:9095,nginx-egress-proxy:9096"
+  - name: INFO_EXCHANGE_BASE_URL
+    value: "http://nginx-egress-proxy:446"
+  settings:
+    istioDisabled: false
+    secretsDisabled: true
+    stand: "test"
+    filebeatToKafkaDisabled: true
+    loggingConsoleDisabled: true
+    logbackTcpInputLoggingDisabled: true
+    elkDisabled: true
+    logbackConfigurationDebug: true
+    logBackLoggerLevel: "debug"
+    logstashWithTcpInputForLogback:
+    - "nginx-egress-proxy:5043"
+  vault:
+    agentInitDisabled: true
+    projectAsRole: ""
+    namespace: ""

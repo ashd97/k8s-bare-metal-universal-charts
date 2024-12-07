@@ -1,0 +1,26 @@
+{{ if not .Values.projectEgressProxy.settings.istioDisabled }}
+apiVersion: networking.istio.io/v1alpha3  # API version for Istio service entry configuration
+kind: ServiceEntry  # The kind of resource, which is ServiceEntry in Istio
+metadata:  # Metadata about the ServiceEntry
+  name: {{.Chart.Name }}-http-service-entry  # Name of the service entry, derived from the chart name
+  namespace: {{ .Values.projectEgressProxy.vault.namespace }}  # Namespace where the service entry will be created
+  resourceVersion: '1-0-0'  # Resource version for the service entry
+  annotations:  # Additional metadata annotations
+    deploymentTime: {{ now | date "02.01.2006 15:04:05" }}  # Timestamp of when the deployment was created
+
+spec:  # Specification of the service entry
+  hosts:  # List of hosts that the service entry will cover
+  - "{{.Chart.Name }}"  # Host name, derived from the chart name
+
+  ports:  # List of ports for the service entry
+
+{{ if .Values.projectEgressProxy.settings.proxy.infoExchange.url }}
+  - number: 446  # Port number 446 for info exchange
+    name: https-446-info-exchange  # Name of the port for info exchange
+    protocol: HTTPS  # Protocol for this port is HTTPS
+{{ end }}
+
+  resolution: DNS  # DNS resolution method for this service entry
+  location: MESH_EXTERNAL  # The location of the service is external to the mesh
+
+{{ end }}

@@ -1,0 +1,45 @@
+projectIngressProxy:
+  deployment:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    readinessProbe:
+      initialDelay: 60
+      period: 2
+      successThreshold: 2
+      timeout: 2
+      failureThreshold: 60
+    livenessProbe:
+      initialDelay: 60
+      period: 10
+      successThreshold: 1
+      timeout: 5
+      failureThreshold: 10
+    replicas: 1
+  settings:
+    stand: "test"
+    showDebugInfo: "true"
+    grafana:
+      enabled: "false"
+    elk:
+      disabled: true
+    nginxStatusPublishDisabled: false # nginx_status will be available at domain/test link for additional devops checks
+    sslTerminated: false
+    javaServices:
+      javaApp1: "java-application-service1:8080"
+      javaApp2: "java-application-service2:8080"
+      javaApp3: "java-application-service3:8080"
+  tls:
+    proxyDomain: project-proxy.kube.dmz
+    istioDisabled: false
+  vault:
+    agentInitDisabled: false # if true, set MountPath: "/etc/secrets"
+    path: "secret_v2_t/data/youre/path/ingress"
+    MountPath: "/vault/secrets"
+    serviceaccount: "serviceaccount"
+    namespace: "test-namespace"
+    ProjectAsRole: "kube-role"
+  namespace: test-namespace

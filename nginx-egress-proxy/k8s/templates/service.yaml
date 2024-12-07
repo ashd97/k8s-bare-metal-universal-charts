@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Chart.Name }}
+  labels:
+    {{ include "default.labels" . | indent 4 }}
+  annotations:
+      DeploymentTime: {{ now | date "02.01.2006 15:04:05" }}
+spec:
+  ports:
+    - name: db-shard0-master
+      protocol: TCP
+      port: 5432
+      targetPort: 5432
+{{ if .Values.projectEgressProxy.settings.proxy.jdbc.shard0Db.slaveUrl}}
+    - name: db-shard0-slave
+      protocol: TCP
+      port: 54341
+      targetPort: 54341
+{{ end }}
+{{ if .Values.projectEgressProxy.settings.proxy.jdbc.shard1Db.masterUrl }}
+    - name: db-shard1-master
+      protocol: TCP
+      port: 5435
+      targetPort: 5435
+{{ end }}
+{{ if .Values.projectEgressProxy.settings.proxy.infoExchange.url }}
+    - name: info-exchange
+      protocol: TCP
+      port: 446
+      targetPort: 8446
+{{ end }}
+
+{{ if .Values.projectEgressProxy.settings.proxy.kafka.serverUrl1 }}
+    - name: kafka-1
+      protocol: TCP
+      port: 9092
+      targetPort: 9092
+{{ end }}
+{{ if .Values.projectEgressProxy.settings.proxy.kafka.serverUrl2 }}
+    - name: kafka-2
+      protocol: TCP
+      port: 9093
+      targetPort: 9093
+{{ end }}
+{{ if .Values.projectEgressProxy.settings.proxy.kafka.serverUrl3 }}
+    - name: kafka-3
+      protocol: TCP
+      port: 9094
+      targetPort: 9094
+{{ end }}
+{{ if .Values.projectEgressProxy.settings.proxy.kafka.serverUrl4 }}
+    - name: kafka-4
+      protocol: TCP
+      port: 9095
+      targetPort: 9095
+{{ end }}
+{{ if .Values.projectEgressProxy.settings.proxy.kafka.serverUrl5 }}
+    - name: kafka-5
+      protocol: TCP
+      port: 9096
+      targetPort: 9096
+{{ end }}
+{{ if .Values.projectEgressProxy.settings.proxy.elk.logback }}
+{{ if .Values.projectEgressProxy.settings.proxy.elk.logback.url1 }}
+    - name: logback-to-logstash-tcpinput1
+      protocol: TCP
+      port: 5043
+      targetPort: 5043
+{{ end }}
+{{ if .Values.projectEgressProxy.settings.proxy.elk.logback.url2 }}
+    - name: logback-to-logstash-tcpinput2
+      protocol: TCP
+      port: 5044
+      targetPort: 5044
+{{ end }}
+{{ if .Values.projectEgressProxy.settings.proxy.elk.logback.url3 }}
+    - name: logback-to-logstash-tcpinput3
+      protocol: TCP
+      port: 5045
+      targetPort: 5045
+{{ end }}
+{{ end }}
+{{ if .Values.projectEgressProxy.settings.proxy.elk.filebeat }}
+{{ if .Values.projectEgressProxy.settings.proxy.elk.filebeat.url1 }}
+    - name: filebeat-to-logstash-beatsinput1
+      protocol: TCP
+      port: 5046
+      targetPort: 5046
+{{ end }}
+{{ if .Values.projectEgressProxy.settings.proxy.elk.filebeat.url2 }}
+    - name: filebeat-to-logstash-beatsinput2
+      protocol: TCP
+      port: 5047
+      targetPort: 5047
+{{ end }}
+{{ if .Values.projectEgressProxy.settings.proxy.elk.filebeat.url3 }}
+    - name: filebeat-to-logstash-beatsinput3
+      protocol: TCP
+      port: 5048
+      targetPort: 5048
+{{ end }}
+{{ end }}
+{{ if not .Values.projectEgressProxy.vault.VaultAgentInitDisabled }}
+    - name: secman
+      protocol: TCP
+      port: 80
+      targetPort: 8442
+{{ end }}
+  selector:
+    app: {{.Chart.Name }}
+  type: ClusterIP
+  sessionAffinity: None

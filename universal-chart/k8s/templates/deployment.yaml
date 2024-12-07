@@ -1,0 +1,271 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }} # Name of the deployment, derived from the Helm chart name.
+  labels:
+    {{ include "default.labels" . | indent 4 }} # Standard labels for resource identification.
+  annotations:
+    meta.helm.sh/release-name: {{ .Chart.Name }} # Tracks Helm release name.
+    deploymentTime: {{ now | date "02.01.2006 15:04:05" }} # Adds deployment timestamp for tracking purposes and correct rollingUpdate.
+    namespace: {{ .Values.projectApp.vault.namespace }}
+{{ if not .Values.projectApp.settings.istioDisabled }}
+    sidecar.istio.io/inject: "true"  # Enables Istio sidecar injection
+{{ end }}
+spec:
+  progressDeadlineSeconds: 600 # Time limit in seconds for deployment to progress before marking as failed.
+  replicas: {{ .Values.projectApp.deployment.replicas | default 1 }} # Number of pod replicas to maintain.
+  revisionHistoryLimit: 10 # Number of old replicas to retain for rollback purposes.
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }} # Matches pods with this label.
+  strategy:
+    rollingUpdate:
+      maxSurge: 5 # Maximum number of pods created above desired replicas during an update.
+      maxUnavailable: 0 # Maximum number of pods unavailable during an update.
+    type: RollingUpdate # Update strategy for rolling updates.
+  template:
+    metadata:
+      annotations:
+        prometheus.io_path: /api/prometheus # Path to scrape metrics for Prometheus.
+        prometheus.io_port: '8080' # Port for Prometheus metrics.
+        prometheus.io_scheme: https # Scheme used for scraping (HTTPS).
+        prometheus.io_scrape: 'true'
+{{ if not .Values.projectApp.settings.istioDisabled }}
+        sidecar.istio.io/inject: 'true'  # Enables Istio sidecar injection
+        traffic.sidecar.istio.io/excludeOutboundPorts: '8200'
+{{ end }}
+        deploymentTime: {{ now | date "02.01.2006 15:04:05" }}
+{{ if not .Values.projectApp.vault.agentInitDisabled }}
+        vault.hashicorp.com/agent-configmap: {{ .Chart.Name }}-vault # ConfigMap for Vault agent settings.
+        sidecar.istio.io/inject: 'false' # Disables Istio sidecar injection for Vault agent compatibility.
+        vault.hashicorp.com/log-level: debug # Sets Vault agent log level to debug.
+        vault.hashicorp.com/agent-inject: 'true' # Enables Vault agent sidecar injection.
+        vault.hashicorp.com/agent-init-first: 'true' # Ensures the Vault agent runs before the app container.
+        vault.hashicorp.com/agent-pre-populate-only: 'true' # Pre-populates secrets without remaining active.
+        vault.hashicorp.com/agent-enable-quit: 'true' # Enables the Vault agent's quit endpoint.
+        vault.hashicorp.com/secret-volume-path: '/vault/secrets' # Mount path for secrets injected by Vault.
+        vault.hashicorp.com/agent-volumes-default-mode: '0400' # File permissions for injected secrets.
+        vault.hashicorp.com/agent-limits-cpu: 100m # CPU limit for Vault agent.
+        vault.hashicorp.com/agent-limits-mem: 128Mi # Memory limit for Vault agent.
+        vault.hashicorp.com/agent-requests-cpu: 100m # CPU request for Vault agent.
+        vault.hashicorp.com/agent-requests-mem: 128Mi # Memory request for Vault agent.
+        vault.hashicorp.com/namespace: '{{ .Values.projectApp.vault.namespace }}' # Vault namespace.
+        vault.hashicorp.com/role: '{{ .Values.projectApp.vault.projectAsRole }}' # Vault role for the app.
+{{ end }}
+      labels:
+        {{- if not .Values.projectApp.settings.istioDisabled -}}
+        istio.io/rev: "1-0-0"
+        {{- end -}}
+        {{ include "default.labels" . | indent 4 }} # Standard labels for pod template.
+        author: "Sava Kanevsky savakanevskydev@gmail.com"
+    spec:
+      dnsPolicy: ClusterFirst # Use cluster DNS policy.
+      restartPolicy: Always # Always restart containers on failure.
+      schedulerName: default-scheduler # Scheduler to use.
+      securityContext:
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        runAsNonRoot: true
+      terminationGracePeriodSeconds: 30 # Grace period for pod termination.
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: app # Prevents scheduling on the same node for high availability.
+                  operator: In
+                  values:
+                  - {{ .Chart.Name }}
+              topologyKey: kubernetes.io/hostname
+      imagePullSecrets:
+        - name: regcred # Secret for pulling images from a private registry. https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+      containers:
+        - name: {{ .Chart.Name }} # Name of the main container.
+          resources:
+            limits:
+              cpu: {{ .Values.projectApp.deployment.resources.limits.cpu | default "200" }} # CPU limit.
+              memory: {{ .Values.projectApp.deployment.resources.limits.memory | default "16" }} # Memory limit.
+            requests:
+              cpu: {{.Values.projectApp.deployment.resources.requests.cpu | default "200m" }} # CPU request.
+              memory: {{ .Values.projectApp.deployment.resources.requests.memory | default "600мi" }} # Memory request.
+          readinessProbe:
+            httpGet:
+              path: /api/healthcheck # Endpoint to check pod readiness.
+              port: {{ .Values.projectApp.env.ServerPort | default 8080 }} # Port for readiness check.
+              scheme: {{ .Values.projectApp.env.HealthcheckScheme | default "HTTPS" }} # HTTPS for security.
+            initialDelaySeconds: {{ .Values.projectApp.deployment.readinessProbe.initialDelay | default "120" }} # Delay before first probe.
+            periodSeconds: {{ .Values.projectApp.deployment.readinessProbe.period | default "2" }} # Probe interval.
+            successThreshold: {{ .Values.projectApp.deployment.readinessProbe.successThreshold | default "2" }} # Success threshold.
+            timeoutSeconds: {{ .Values.projectApp.deployment.readinessProbe.timeout | default "2" }} # Probe timeout.
+            failureThreshold: {{ .Values.projectApp.deployment.readinessProbe.failureThreshold | default "50" }} # Failure threshold before restart.
+          livenessProbe: 
+            httpGet:
+              path: /api/healthcheck # Endpoint for liveness check.
+              port: {{ .Values.projectApp.env.ServerPort | default 8080 }} # Port for liveness check.
+              scheme: {{ .Values.projectApp.env.HealthcheckScheme | default "HTTPS" }} # HTTPS for security.
+            initialDelaySeconds: {{ .Values.projectApp.deployment.livenessProbe.initialDelay | default "120" }} # Delay before first probe.
+            periodSeconds: {{ .Values.projectApp.deployment.livenessProbe.period | default "10" }} # Probe interval.
+            successThreshold: {{ .Values.projectApp.deployment.livenessProbe.successThreshold | default "1" }} # Success threshold.
+            timeoutSeconds: {{ .Values.projectApp.deployment.livenessProbe.timeout | default "5" }} # Probe timeout.
+            failureThreshold: {{ .Values.projectApp.deployment.livenessProbe.failureThreshold | default "10" }} # Failure threshold before restart.
+          ports:
+          - containerPort: {{ .Values.projectApp.env.ServerPort | default 8080 }} # Exposed container port.
+            protocol: TCP # Protocol type.
+          terminationMessagePath: /dev/termination-log # Location for termination logs.
+          image: {{ .Values.projectApp.deployment.image }} # Container image.
+          args:
+            - -c
+            - printenv; java -XshowSettings:all -version; java -jar *.jar $JAVA_OPTS
+          command:
+            - /bin/bash
+          imagePullPolicy: Always # Always pull the image for updates.
+          terminationMessagePolicy: FallbackToLogsOnError # Fallback to logs if no termination message.
+          securityContext:
+            readOnlyRootFilesystem: true # Root filesystem is read-only for security.
+            runAsUser: 999 # User ID for the container.
+            allowPrivilegeEscalation: false # Disables privilege escalation.
+            runAsNonRoot: true # Ensures the container runs as non-root.
+          env:
+          - name: POD_NAME # Pod name.
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: NODE_ID # Node ID.
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: POD_NAMESPACE # Pod namespace.
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: POD_IP # Pod IP.
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          {{- range .Values.projectApp.envVars }}
+          - name: {{ .name }}
+            value: {{ .value | quote }}
+          {{- end }}
+          envFrom:
+          - configMapRef:
+              name: {{ .Chart.Name }}-env # Environment variables from ConfigMap.
+          volumeMounts:
+            - name: javaapp-logs
+              readOnly: false 
+              mountPath: /tmp # Logs directory.
+{{ if not .Values.projectApp.settings.secretsDisabled }}
+            - name: {{ .Chart.Name }}-secret
+              mountPath: /etc/secrets
+              readOnly: true
+{{ end }}
+{{ if not .Values.projectApp.settings.logbackTcpInputLoggingDisabled }}
+            - mountPath: /opt/app/config/logback-spring.xml
+              name: {{ .Chart.Name }}-fls-logback
+              readOnly: true
+              subPath: logback-spring.xml # Mounts Logback configuration.
+{{ end }}
+{{ if not .Values.projectApp.settings.elkDisabled }}
+        - name: filebeat
+          # Name of the Filebeat container, used for log forwarding to ELK stack.
+          image: "domain/registry_connect_redhat_com/elastic/filebeat:7.12.1" 
+          # Filebeat image from the specified registry and version.
+          imagePullPolicy: "Always"
+          # Ensures the image is always pulled on deployment.
+          securityContext:
+            runAsUser: 999
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false  # Enforces a read-only root filesystem for enhanced security.
+            runAsNonRoot: true
+          args:
+            -'-e'
+            # Runs Filebeat in the foreground to log errors to stderr.
+          resources:
+            # Resource limits and requests for the Filebeat container.
+            limits:
+              cpu: "100m"       # Maximum CPU usage.
+              memory: "200Mi"   # Maximum memory usage.
+            requests:
+              cpu: "100m"       # Minimum guaranteed CPU allocation.
+              memory: "100Mi"   # Minimum guaranteed memory allocation.
+          volumeMounts:
+            # Mounts volumes for Filebeat configuration and log data.
+            - name: app-logs
+              readOnly: false 
+              # Allows Filebeat to write to the app logs directory.
+              mountPath: /tmp
+            - name: filebeat-config
+              readOnly: true
+              # Mounts the Filebeat configuration file.
+              mountPath: /usr/share/filebeat/filebeat.yml
+              subPath: filebeat.yml
+            - name: filebeat-data
+              readOnly: false
+              # Stores Filebeat's internal data (e.g., registry file for tracking processed logs).
+              mountPath: /usr/share/filebeat/data
+          env:
+            # Environment variables passed to the Filebeat container.
+            - name: SERVICE_NAME
+              valueFrom:
+                configMapKeyRef:
+                  # Fetches the service name from the specified ConfigMap.
+                  name: {{ .Chart.Name }}-env 
+                  key: {{ .Chart.Name }}_SERVICE_NAME
+            - name: SERVICE_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  # Fetches the service version from the specified ConfigMap.
+                  name: {{ .Chart.Name }}-env 
+                  key: {{ .Chart.Name }}_SERVICE_VERSION
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  # Fetches the namespace where the pod is deployed.
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  # Fetches the name of the pod.
+                  fieldPath: metadata.name
+
+{{ end }}
+      volumes:
+        - name: javaapp-logs
+          emptyDir: {}
+          # Temporary directory for storing application logs.
+{{ if not .Values.projectApp.settings.secretsDisabled }}
+        - name: {{ .Chart.Name }}-secret
+          secret:
+            secretName: {{ .Chart.Name }}-secret
+            defaultMode: 400
+{{ end }}
+{{ if not .Values.projectApp.settings.elkDisabled }}
+        - name: filebeat-data
+          emptyDir: {}
+          # Temporary directory for Filebeat's internal data.
+        - configMap:
+            # Mounts the Filebeat configuration from a ConfigMap.
+            items:
+            - key: FILEBEAT_YML
+              # The key within the ConfigMap containing the Filebeat configuration.
+              path: filebeat.yml
+            name: {{ .Chart.Name }}-files
+            # Name of the ConfigMap providing Filebeat configuration.
+            defaultMode: 256
+            # Permissions for the configuration file.
+          name: filebeat-config
+{{ end }}
+{{ if not .Values.projectApp.settings.logbackTcpInputLoggingDisabled }}
+        - configMap:
+            defaultMode: 256
+            # Permissions for the Logback configuration file.
+            items:
+            - key: {{ .Chart.Name }}_LOGBACK_XML
+              # The key within the ConfigMap containing the Logback configuration.
+              path: logback-spring.xml
+            name: {{ .Chart.Name }}-files
+            # Name of the ConfigMap providing Logback configuration.
+          name: {{ .Chart.Name }}-fls-logback
+{{ end }}

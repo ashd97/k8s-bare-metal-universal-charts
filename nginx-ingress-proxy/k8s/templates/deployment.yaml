@@ -1,0 +1,272 @@
+apiVersion: apps/v1  # Specifies the API version for the Kubernetes Deployment resource.
+kind: Deployment  # Defines the kind of resource as a Deployment.
+metadata:  # Metadata section for the resource.
+  name: {{ .Chart.Name }}  # Sets the name of the deployment based on the chart name.
+  namespace: {{ .Values.projectIngressProxy.vault.namespace }}  # Specifies the namespace for the deployment.
+  labels:  # Labels for the deployment, helpful for identification and selection.
+    {{ include "default.labels" . | indent 4 }}  # Includes default labels and indents them for proper formatting.
+  annotations:  # Annotations for additional metadata.
+    meta.helm.sh/release-name: {{ .Chart.Name }}  # Annotates the release name with the chart name.
+    deploymentTime: {{ now | date "02.01.2006 15:04:05" }}  # Annotates the deployment time with the current timestamp.
+# Checks if Istio is not disabled.
+{{ if not .Values.projectIngressProxy.settings.istioDisabled }}
+    sidecar.istio.io/inject: "true"  # Enables Istio sidecar injection for the deployment.
+{{ end }}
+spec:  # Specifications for the deployment.
+  progressDeadlineSeconds: 600  # Time in seconds before a deployment is considered failed.
+  replicas: {{.Values.projectIngressProxy.deployment.replicas | default 1 }}  # Defines the number of replicas to be deployed, defaulting to 1 if not specified.
+  selector:  # Defines how the deployment finds which pods to manage.
+    matchLabels:
+      app: {{ .Chart.Name }}  # Matches pods with the label app={{ .Chart.Name }}.
+  template:  # Template for the pods to be created by the deployment.
+    metadata:
+      labels:  # Labels for the pods.
+        app: {{ .Chart.Name }}  # Label for app name.
+        version: v1.18  # Version label for the pods.
+        majorVersion: v1.18  # Major version label for the pods.
+        author: "Sava Kanevsky savakanevskydev@gmail.com"
+        Environment: {{ .Values.projectIngressProxy.settings.stand }}  # Environment label (e.g., production, staging).
+# Checks if Istio is not disabled.
+{{ if not .Values.projectIngressProxy.settings.istioDisabled }}  
+        istio.io/rev: '1-0-0'  # Specifies the Istio revision to be used.
+{{ end }}
+      annotations:  # Annotations for additional metadata for the pod.
+        deploymentTime: {{ now | date "02.01.2006 15:04:05" }}  # Annotates the deployment time for the pod.
+        prometheus.io_path: /api/prometheus  # Path for Prometheus scraping metrics.
+        prometheus.io_port: '8080'  # Port for Prometheus scraping metrics.
+        prometheus.io_scheme: https  # Scheme for Prometheus scraping (https).
+        prometheus.io_scrape: 'true'  # Enables Prometheus to scrape the metrics.
+# Checks if Istio TLS is not disabled.
+{{ if not .Values.projectIngressProxy.tls.istioDisabled }}
+        istio.io/rev: '1-0-0'  # Specifies the Istio revision to be used.
+        sidecar.istio.io/inject: 'true'  # Enables Istio sidecar injection for the pod.
+        traffic.sidecar.istio.io/excludeOutboundPorts: '8200'  # Excludes port 8200 from outbound traffic for the Istio sidecar.
+{{ end }}
+# Checks if Vault agent initialization is not disabled.
+{{ if not .Values.projectIngressProxy.vault.agentInitDisabled }}
+        vault.hashicorp.com/log-level: debug  # Sets the log level for the Vault agent to debug.
+        vault.hashicorp.com/agent-inject: 'true'  # Enables Vault agent injection into the pod.
+        vault.hashicorp.com/agent-init-first: 'true'  # Ensures the Vault agent is initialized first.
+        vault.hashicorp.com/agent-pre-populate-only: 'true'  # Ensures the Vault agent only pre-populates the secrets.
+        vault.hashicorp.com/agent-enable-quit: 'true'  # Enables the quit feature for the Vault agent.
+        vault.hashicorp.com/secret-volume-path: '/vault/secrets'  # Defines the path for mounting Vault secrets.
+        vault.hashicorp.com/agent-volumes-default-mode: '0400'  # Sets the default volume permissions for Vault agent volumes.
+        vault.hashicorp.com/agent-limits-cpu: 100m  # Defines the CPU limit for the Vault agent.
+        vault.hashicorp.com/agent-limits-mem: 128Mi  # Defines the memory limit for the Vault agent.
+        vault.hashicorp.com/agent-requests-cpu: 100m  # Defines the CPU request for the Vault agent.
+        vault.hashicorp.com/agent-requests-mem: 128Mi  # Defines the memory request for the Vault agent.
+        vault.hashicorp.com/namespace: '{{ .Values.projectIngressProxy.vault.namespace }}'  # Sets the Vault namespace.
+        vault.hashicorp.com/role: '{{ .Values.projectIngressProxy.vault.ProjectAsRole }}'  # Sets the Vault role.
+        vault.hashicorp.com/ca-cert: /vault/tls/ca.crt  # Defines the CA certificate for Vault.
+        vault.hashicorp.com/tls-secret: vault-server-tls-ca  # Defines the TLS secret for Vault.
+        vault.hashicorp.com/agent-inject-secret-tls_crt: '{{ .Values.projectIngressProxy.vault.path }}'  # Defines the secret path for the TLS certificate.
+        # Defines a template for the TLS certificate.
+        vault.hashicorp.com/agent-inject-template-tls_crt: |
+          {{`{{ with secret `}}"{{ .Values.projectIngressProxy.vault.path }}"{{` }}`}}
+          {{`{{ .Data.data.tls_crt | base64Decode }}`}}
+          {{`{{ end }}`}}
+        vault.hashicorp.com/agent-inject-file-tls_crt: "tls.crt"  # Mounts the TLS certificate as a file.
+        vault.hashicorp.com/agent-inject-secret-tls_key: '{{ .Values.projectIngressProxy.vault.path }}'  # Defines the secret path for the TLS key.
+        # Defines a template for the TLS key.
+        vault.hashicorp.com/agent-inject-template-tls_key: |
+          {{`{{ with secret }}"{{ .Values.projectIngressProxy.vault.path }}"{{` }}`}}
+          {{`{{ .Data.data.tls_key | base64Decode }}`}}
+          {{`{{ end }}`}}
+        vault.hashicorp.com/agent-inject-file-tls_key: "tls.key"  # Mounts the TLS key as a file.
+        vault.hashicorp.com/agent-inject-secret-cacerts_crt: '{{ .Values.projectIngressProxy.vault.path }}'  # Defines the secret path for the CA certificate.
+        # Defines a template for the CA certificate.
+        vault.hashicorp.com/agent-inject-template-cacerts_crt: |
+          {{`{{ with secret }}"{{ .Values.projectIngressProxy.vault.path }}"{{` }}`}}
+          {{`{{ .Data.data.cacerts_crt | base64Decode }}`}}
+          {{`{{ end }}`}}
+        vault.hashicorp.com/agent-inject-file-cacerts_crt: "cacerts.crt"  # Mounts the CA certificate as a file.
+{{ end }}
+    spec:
+      serviceAccountName: '{{ .Values.projectIngressProxy.vault.serviceaccount }}'  # Defines the service account name for Vault access.
+      affinity:  # Specifies affinity rules for pod placement.
+        podAntiAffinity:  # Anti-affinity rules to ensure pods are not scheduled on the same node.
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: app  # Matches pods with the label app={{ .Chart.Name }}.
+                  operator: In
+                  values:
+                  - {{ .Chart.Name }}  # Ensures pods are not scheduled on the same node as other pods with the same label.
+            topologyKey: "kubernetes.io/hostname"  # Ensures the pods are scheduled on different nodes.
+      volumes:  # Defines volumes for the deployment.
+        - name: {{ .Chart.Name }}-config  # Defines the volume name for configuration files.
+          configMap:  # Mounts a ConfigMap as a volume.
+            name: {{ .Chart.Name }}-cfg  # The name of the ConfigMap.
+            defaultMode: 400  # Sets the default file permissions for the mounted files.
+            items:  # Specifies the configuration files to be mounted.
+              - key: nginx.conf
+                path: nginx.conf
+              - key: project.conf
+                path: conf/project.conf
+              - key: status.conf
+                path: conf/status.conf
+              - key: project-ssl.conf
+                path: conf/project-ssl.conf
+              - key: headers.txt
+                path: conf/headers.txt
+# Checks if Vault agent initialization is disabled.
+{{ if .Values.projectIngressProxy.vault.agentInitDisabled }}  
+        - name: {{ .Chart.Name }}-secret
+          secret:
+            secretName: {{ .Chart.Name }}-secret  # Mounts a secret as a volume.
+            defaultMode: 400  # Sets the file permissions for the secret.
+{{ end }}
+        - name: app-logs
+          emptyDir: {}  # Defines an empty directory for app logs.
+{{ if not .Values.projectIngressProxy.settings.elk.disabled }}
+        - name: filebeat-data
+          emptyDir: {}
+{{ end }}
+# Check if Vault agent initialization is disabled.
+{{ if .Values.projectIngressProxy.vault.agentInitDisabled }}  
+        - name: filebeat-ssl  # Define the volume name for Filebeat SSL certificates.
+          secret:  # Use a Kubernetes secret to store the SSL certificates.
+            secretName: {{ .Chart.Name }}-secret  # Reference the secret by its name.
+            items:  # Specify the keys and paths for the certificates in the secret.
+              - key: FILEBEAT_CRT_PEM  # Key for the Filebeat certificate.
+                path: crt.pem  # Path where the certificate will be mounted.
+              - key: FILEBEAT_KEY_PEM  # Key for the Filebeat private key.
+                path: key.pem  # Path where the private key will be mounted.
+              - key: FILEBEAT_CA_CHAIN_PEM  # Key for the Filebeat CA chain.
+                path: ca-chain.pem  # Path where the CA chain will be mounted.
+{{ end }}
+        - name: filebeat-config  # Define the volume for Filebeat configuration.
+          configMap:  # Use a ConfigMap to store the Filebeat configuration.
+            name: {{ .Chart.Name }}-cfg  # Reference the ConfigMap by its name.
+            items:  # Specify the keys and paths for the configuration file.
+              - key: filebeat.yml  # Key for the Filebeat configuration file.
+                path: filebeat.yml  # Path where the configuration file will be mounted.
+            defaultMode: 0644  # Set file permissions for the mounted configuration file.
+      imagePullSecrets:  # Define image pull secrets for accessing private container registries.
+        - name: regcred  # Reference the image pull secret by its name.
+      containers:  # Define the containers in the pod.
+        - name: {{ .Chart.Name }}  # Set the container name to match the chart name.
+          resources:  # Specify resource limits and requests for the container.
+            limits:  # Define the maximum resources the container can use.
+              cpu: {{ .Values.projectIngressProxy.deployment.limits.cpu | default "200m" }}  # Set the CPU limit.
+              memory: {{.Values.projectIngressProxy.deployment.limits.memory | default "256Mi" }}  # Set the memory limit.
+            requests:  # Define the minimum resources the container requires.
+              cpu: {{ .Values.projectIngressProxy.deployment.requests.cpu | default "200m" }}  # Set the CPU request.
+              memory: {{.Values.projectIngressProxy.deployment.requests.memory | default "256Mi" }}  # Set the memory request.
+          readinessProbe:  # Define the readiness probe for the container.
+            httpGet:  # Use an HTTP GET request for the readiness probe.
+              path: nginx_status  # Path to check for readiness.
+              port: 8084  # Port to check for readiness.
+              scheme: HTTP  # Use HTTP as the scheme for the probe.
+            initialDelaySeconds: {{ .Values.projectIngressProxy.deployment.readinessProbe.initialDelay | default 60 }}  # Delay before the first readiness probe.
+            periodSeconds: {{ .Values.projectIngressProxy.deployment.readinessProbe.period | default 2 }}  # Frequency of readiness probes.
+            successThreshold: {{ .Values.projectIngressProxy.deployment.readinessProbe.successThreshold | default 2 }}  # Number of successes needed to mark the container as ready.
+            timeoutSeconds: {{ .Values.projectIngressProxy.deployment.readinessProbe.timeout | default 2 }}  # Timeout for the readiness probe.
+            failureThreshold: {{ .Values.projectIngressProxy.deployment.readinessProbe.failureThreshold | default 60 }}  # Number of failures before marking the container as unready.
+          livenessProbe:  # Define the liveness probe for the container.
+            httpGet:  # Use an HTTP GET request for the liveness probe.
+              path: nginx_status  # Path to check for liveness.
+              port: 8084  # Port to check for liveness.
+              scheme: HTTP  # Use HTTP as the scheme for the probe.
+            initialDelaySeconds: {{ .Values.projectIngressProxy.deployment.livenessProbe.initialDelay | default 60 }}  # Delay before the first liveness probe.
+            periodSeconds: {{ .Values.projectIngressProxy.deployment.livenessProbe.period | default 10 }}  # Frequency of liveness probes.
+            successThreshold: {{ .Values.projectIngressProxy.deployment.livenessProbe.successThreshold | default 1 }}  # Number of successes needed to mark the container as live.
+            timeoutSeconds: {{ .Values.projectIngressProxy.deployment.livenessProbe.timeout | default 5 }}  # Timeout for the liveness probe.
+            failureThreshold: {{ .Values.projectIngressProxy.deployment.livenessProbe.failureThreshold | default 10 }}  # Number of failures before restarting the container.
+          terminationMessagePolicy: FallbackToLogsOnError  # Use logs as the termination message if available.
+          image: >-
+            cname.registry/nginx/nginx:1.18-nonroot
+          imagePullPolicy: Always  # Always pull the image when deploying.
+          securityContext:  # Define the security context for the container.
+            runAsUser: 101  # Run the container as user ID 101.
+            runAsGroup: 101  # Run the container as group ID 101.
+            readOnlyRootFilesystem: false  # Allow writing to the root filesystem.
+            allowPrivilegeEscalation: false  # Prevent privilege escalation.
+            runAsNonRoot: true  # Enforce running as a non-root user.
+          args:  # Arguments for the container's entrypoint.
+            - -c  # Pass the '-c' argument.
+            - printenv; date; nginx -V; nginx -c $NGINX_CONF_PATH -T; nginx -g "daemon off;" -c $NGINX_CONF_PATH
+          command:  # Define the command to run in the container.
+            - /bin/bash  # Use Bash as the command.
+          env:  # Define environment variables for the container.
+            - name: NGINX_CONF_PATH  # Name of the environment variable.
+              value: /usr/local/project/nginx/custom/nginx.conf  # Path to the NGINX configuration file.
+          volumeMounts:  # Mount volumes into the container.
+            - name: {{ .Chart.Name }}-config  # Mount the configuration volume.
+              mountPath: /usr/local/project/nginx/custom  # Path to mount the configuration files.
+              readOnly: true  # Mount the configuration volume as read-only.
+            - name: app-logs  # Mount the application logs volume.
+              mountPath: /var/log/project  # Path to mount the logs.
+# Check if Vault agent initialization is disabled.
+{{ if .Values.projectIngressProxy.vault.agentInitDisabled }}  
+            - name: {{ .Chart.Name }}-secret  # Mount the secret volume.
+              mountPath: /etc/secrets  # Path to mount the secrets.
+              readOnly: true  # Mount the secret volume as read-only.
+{{ end }}
+# Check if ELK logging is not disabled in the settings.
+{{ if not .Values.projectIngressProxy.settings.elk.disabled }}  
+        - name: filebeat-elk  # Define the container for Filebeat, used for ELK stack integration.
+          image: "cname-group.docker-registry.dmz/filebeat:8.5.3"  # Specify the Filebeat image version.
+          imagePullPolicy: Always  # Always pull the image when deploying.
+          securityContext:  # Set security context for the Filebeat container.
+            runAsUser: 1000  # Run the container as user ID 1000.
+            runAsGroup: 1000  # Run the container as group ID 1000.
+            allowPrivilegeEscalation: false  # Prevent privilege escalation for the container.
+            runAsNonRoot: true  # Ensure the container runs as a non-root user.
+          command: ['filebeat', '-e', '-c', '/usr/share/filebeat/filebeat.yml', '-d', '*']  # Command to run Filebeat with configuration.
+          env:  # Define environment variables for the Filebeat container.
+          - name: NGINX_INGRESS_PROXY_SERVICE_NAME  # Environment variable for the service name.
+            value: {{ .Chart.Name }}  # Set the service name to the chart name.
+          - name: NGINX_INGRESS_PROXY_SERVICE_VERSION  # Environment variable for the service version.
+            value: "v1.18"  # Set the service version.
+          - name: POD_NAMESPACE  # Environment variable for the pod's namespace.
+            valueFrom:  # Value is derived dynamically from the pod's metadata.
+              fieldRef:  # Reference a field in the pod's metadata.
+                apiVersion: v1  # API version for the metadata.
+                fieldPath: metadata.namespace  # Get the namespace from the metadata.
+          - name: POD_NAME  # Environment variable for the pod's name.
+            valueFrom:  # Value is derived dynamically from the pod's metadata.
+              fieldRef:  # Reference a field in the pod's metadata.
+                apiVersion: v1  # API version for the metadata.
+                fieldPath: metadata.name  # Get the name from the metadata.
+          resources:  # Define resource limits and requests for the Filebeat container.
+            limits:  # Specify the maximum resources the container can use.
+              cpu: 100m  # Set the CPU limit.
+              memory: 200Mi  # Set the memory limit.
+            requests:  # Specify the minimum resources the container requires.
+              cpu: 100m  # Set the CPU request.
+              memory: 100Mi  # Set the memory request.
+          volumeMounts:  # Mount volumes into the Filebeat container.
+            - name: app-logs  # Mount the application logs volume.
+              readOnly: false  # Allow writing to the volume.
+              mountPath: /tmp  # Mount the logs at /tmp.
+            - name: filebeat-data  # Mount the Filebeat data volume.
+              readOnly: false  # Allow writing to the volume.
+              mountPath: /usr/share/filebeat/data/  # Mount the data at this path.
+# Check if Vault agent initialization is disabled.
+{{ if .Values.projectIngressProxy.vault.agentInitDisabled }}  
+            - name: filebeat-ssl  # Mount the Filebeat SSL volume.
+              readOnly: true  # Mount the volume as read-only.
+              mountPath: /usr/share/filebeat/ssl  # Path to mount the SSL certificates.
+{{ end }}
+            - name: filebeat-config  # Mount the Filebeat configuration volume.
+              readOnly: true  # Mount the configuration as read-only.
+              mountPath: /usr/share/filebeat/filebeat.yml  # Path to mount the configuration file.
+              subPath: filebeat.yml  # Use sub-path for the configuration file.
+{{ end }}
+      restartPolicy: Always  # Always restart the pod if it fails.
+      terminationGracePeriodSeconds: 30  # Grace period before forcing the pod to terminate.
+      dnsPolicy: ClusterFirst  # Use cluster DNS first, then fallback to host DNS.
+      securityContext:  # Set security context for the pod.
+        runAsUser: 101  # Run the pod as user ID 101.
+        runAsGroup: 101  # Run the pod as group ID 101.
+        fsGroup: 101  # Set file system group ID to 101.
+        runAsNonRoot: true  # Ensure the pod runs as a non-root user.
+      schedulerName: default-scheduler  # Use the default scheduler for the pod.
+  strategy:  # Define the deployment strategy.
+    type: RollingUpdate  # Use rolling updates for the deployment.
+    rollingUpdate:  # Configure rolling update parameters.
+      maxUnavailable: 0  # Ensure no unavailable pods during the update.
+      maxSurge: 5  # Allow up to 5 extra pods during the update.
+  revisionHistoryLimit: 10  # Keep history of the last 10 revisions.
+  progressDeadlineSeconds: 600  # Timeout for the deployment to complete.

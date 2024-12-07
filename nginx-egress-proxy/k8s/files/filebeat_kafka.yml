@@ -1,0 +1,38 @@
+{{ if not .Values.projectEgressProxy.settings.filebeatToKafkaDisabled }}
+filebeat.inputs:  # Configures input sources for Filebeat
+- type: log  # Specifies the input type as log
+  enabled: true  # Enables this input
+  paths:  # Defines the paths to the log files
+  /tmp/*.log  # Matches all log files in the /tmp directory
+  json.keys_under_root: true  # Puts all JSON keys from logs at the root level
+  close_removed: true  # Closes file handlers for logs that are deleted
+output.kafka:  # Configures output to Kafka
+  enabled: true  # Enables Kafka output
+  hosts:  # Specifies the Kafka broker addresses
+    {{- range $value = .Values.projectEgressProxy.settings.filebeat.kafkaServersForLogs }}
+      - "{{ $value }}"
+    {{ end }}
+  topic: "{{ .Values.projectEgressProxy.settings.filebeat.kafkaTopicForLogs }}"  # Defines the Kafka topic for logs
+  partition.round_robin:  # Configures round-robin partitioning
+    reachable_only: false  # Sends logs to all partitions, regardless of reachability
+  required_acks: 1  # Sets the acknowledgment level to 1 (leader only)
+  compression: gzip  # Compresses messages using gzip
+  max_message_bytes: 1000000  # Sets the maximum message size
+  codec.json:  # Configures JSON formatting
+    pretty: false  # Disables pretty-print for JSON output
+  ssl.enabled: true  # Enables SSL for Kafka communication
+  ssl.key: "/vault/secrets/filebeat.key"  # Path to the SSL key
+  ssl.certificate: "/vault/secrets/filebeat.pem"  # Path to the SSL certificate
+  ssl.certificate_authorities: "/vault/secrets/ca.crt"  # Path to the CA certificates
+processors:  # Configures processors for log enrichment and filtering
+- drop_fields:  # Drops unnecessary fields
+    fields: [ "host", "agent", "log", "input", "ecs" ]  # List of fields to drop
+    ignore_missing: false  # Fails if any of the specified fields are missing
+- add_fields:  # Adds custom fields to the log
+    target: ""  # Specifies the target root for new fields
+    fields:  # Defines the fields to add
+      service: ${SERVICE_NAME}  # Adds the service name from the environment
+      version: ${SERVICE_VERSION}  # Adds the service version from the environment
+      pod: ${POD_NAME}  # Adds the pod name from the environment
+      namespace: ${POD_NAMESPACE}  # Adds the namespace name from the environment
+{{ end }}

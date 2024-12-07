@@ -1,0 +1,4 @@
+"[yaml]": {
+  "editor.defaultFormatter": "kiliantyler.kubernetes-yaml-formatter-x",
+  "editor.formatOnSave": true
+}

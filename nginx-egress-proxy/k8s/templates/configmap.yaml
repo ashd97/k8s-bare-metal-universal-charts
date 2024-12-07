@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Chart.Name }}-cfg
+  labels:
+    {{ include "default.labels" . | indent 4 }}
+  annotations:
+    meta.helm.sh/release-name: {{ .Chart.Name }}
+    DeploymentTime: {{ now | date "02.01.2006 15:04:05" }}
+data:
+  NGINX_EGRESS_PROXY_SERVICE_NAME: "{{ .Chart.Name }}"
+  NGINX_EGRESS_PROXY_SERVICE_VERSION: "v1.18"
+  nginx.conf: |-
+{{ tpl (.Files.Get "files/nginx.conf") . | indent 4 }}
+  status.conf: |-
+{{ tpl (.Files.Get "files/http/status.conf") . | indent 4 }}
+  jdbc.conf: |-
+{{ tpl (.Files.Get "files/stream/jdbc.conf") . | indent 4 }}
+  server-ssl.conf: |-
+{{ tpl (.Files.Get "files/ssl/server-ssl.conf") . | indent 4 }}
+  proxy-stream-ssl.conf: |-
+{{ tpl (.Files.Get "files/ssl/proxy-stream-ssl.conf") . | indent 4 }}
+  proxy-ssl-verify.conf: |-
+{{ tpl (.Files.Get "files/ssl/proxy-ssl-verify.conf") . | indent 4 }}
+  proxy-http-ssl.conf: |-
+{{ tpl (.Files.Get "files/ssl/proxy-http-ssl.conf") . | indent 4 }}
+{{ if not .Values.projectEgressProxy.settings.proxy.kafka.disabled }}
+  kafka.conf: |-
+{{ tpl (.Files.Get "files/stream/kafka.conf") . | indent 4 }}
+{{ end }}
+{{ if not .Values.projectEgressProxy.vault.VaultAgentInitDisabled }}
+  secman.conf: |-
+{{ tpl (.Files.Get "files/http/vault.conf") . | indent 4 }}
+{{ end }}
+{{ if not .Values.projectEgressProxy.settings.proxy.infoExchange.disabled }}
+  info-exchange.conf: |-
+{{ tpl (.Files.Get "files/http/info-exchange.conf") . | indent 4 }}
+{{ end }}
+{{ if not .Values.projectEgressProxy.settings.filebeatPodsLogsToELKDisabled }}
+  elk.conf: |-
+{{ tpl (.Files.Get "files/stream/elk.conf") . | indent 4 }}
+{{ end }}
+{{ if not .Values.projectEgressProxy.settings.elk.disabled }}
+  filebeat.yml: |-
+{{tpl (.Files.Get "files/filebeat.yml") . | indent 4 }}
+{{ end }}

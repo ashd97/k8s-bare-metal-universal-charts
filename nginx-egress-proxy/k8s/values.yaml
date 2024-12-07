@@ -1,0 +1,68 @@
+projectEgressProxy:
+  deployment:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    readinessProbe:
+      initialDelay: 60
+      period: 2
+      successThreshold: 2
+      timeout: 2
+      failureThreshold: 60
+    livenessProbe:
+      initialDelay: 60
+      period: 10
+      successThreshold: 1
+      timeout: 5
+      failureThreshold: 10
+    replicas: 1
+  vault:
+    agentInitDisabled: false # if true, set MountPath: "/etc/secrets"
+    path: "secret_v2_t/data/youre/path/egress"
+    MountPath: "/vault/secrets"
+    serviceaccount: "serviceaccount"
+    namespace: "test-namespace"
+    ProjectAsRole: "kube-role"
+  namespace: test-namespace
+
+  settings:
+    stand: "test"
+    istioDisabled: false
+    filebeatEgressLogsToELKDisabled: true
+    filebeatPodsLogsToELKDisabled: false
+    sslDisabled: false
+    elk:
+      disabled: true
+    proxy:
+      logstashWithBeatsInputForFilebeat:
+      - "logstash.dmz:10455"
+      vault:
+        disabled: true
+      elk:
+        # filebeat:
+        #   url1: "10.178.249.111:10455"
+        logback:
+          url1: "logstash.dmz:10456"
+      infoExchange:
+        disabled: false
+        sslVerifyDisabled: false
+        sslMutualDisabled: true
+        url: "info-exchange-endpoint.dmz"
+      kafka:
+        serverUrl1: "kafka1:9093"
+        serverUrl2: "kafka2:9093"
+        serverUrl3: "kafka3:9093"
+        serverUrl4: "kafka4:9093"
+        serverUrl5: "kafka5:9093"
+      jdbc:
+        shard0Db:
+          masterUrl: "postgresql-node1.dmz:5432"
+          #slaveUrl: ""
+        shard1Db:
+          masterUrl: "postgresql-node2.dmz:5432"
+    showDebugInfo: "true"
+    grafana:
+      enabled: "false"

@@ -1,0 +1,20 @@
+{{ if not .Values.projectEgressProxy.settings.istioDisabled }}
+apiVersion: networking.istio.io/v1alpha3  # Specifies the API version for Istio resources
+kind: DestinationRule  # Defines the kind of resource, in this case, a DestinationRule for Istio
+metadata:  # Metadata for the Istio resource
+  name: {{.Chart.Name }}-http-destination-rule  # The name of the DestinationRule resource, based on the chart name
+  namespace: {{ .Values.projectEgressProxy.vault.namespace }}  # The namespace where the DestinationRule will be created, from the Vault settings
+  resourceVersion: '1-0-0'  # Version of the resource for tracking purposes
+  annotations:  # Annotations to store additional metadata
+    deploymentTime: {{ now | date "02.01.2006 15:04:05" }}  # Adds the deployment time to the annotations
+spec:  # The specification of the DestinationRule
+  host: "{{.Chart.Name }}"  # Specifies the FQDN of the NGINX service to route traffic to
+  trafficPolicy:  # Defines the traffic policy for the destination
+    portLevelSettings:  # Port-level traffic settings for this DestinationRule
+{{ if .Values.projectEgressProxy.settings.proxy.infoExchange.url }}
+    - port:  # Specifies the port to apply the settings
+        number: 446  # The port number for this traffic setting
+      tls:  # TLS settings for secure communication
+        mode: ISTIO_MUTUAL  # Enforces mutual TLS (mTLS) for the specified port, ensuring secure communication between services
+{{ end }}
+{{ end }}
